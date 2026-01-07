@@ -204,30 +204,36 @@ if run:
     )
 
     # ======================================================
-    # Effective fetch
+    # Effective fetch (ordered from North clockwise)
     # ======================================================
+    dir_order = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    
     eff_rows = []
-
-    for sector in sorted(df_fetch["Direction"].unique()):
+    
+    for sector in dir_order:
         sub = df_fetch[df_fetch["Direction"] == sector]
+    
+        if sub.empty:
+            continue
+    
         theta = np.deg2rad(sub["Bearing (deg)"] - sub["Bearing (deg)"].mean())
         w = np.cos(theta) ** 2
         eff = np.sum(sub["Fetch (km)"] * w) / np.sum(w)
-
+    
         eff_rows.append({
             "Direction": sector,
             "Effective Fetch (km)": eff
         })
-
+    
     df_eff = pd.DataFrame(eff_rows)
-
-    st.subheader("Effective Fetch per Sector")
+    
+    st.subheader("Effective Fetch per Direction")
     st.dataframe(
         df_eff.style.format({"Effective Fetch (km)": "{:.2f}"}),
         use_container_width=True
     )
-
     st.success("Analysis complete ✔️")
 
 else:
     st.info("👈 Enter coordinates and click **Run Analysis**")
+
