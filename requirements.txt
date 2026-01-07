@@ -6,3 +6,4 @@ pyproj
 matplotlib
 numpy
 pandas
+plotly
