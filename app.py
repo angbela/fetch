@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 # ======================================================
 st.set_page_config(page_title="Directional Fetch Analyzer", layout="wide")
 st.title("Directional Fetch to Nearest Coastline")
-st.caption("Single coastline · No basemap · Directional fetch")
+st.caption("Single coastline · Land/sea background · Directional fetch")
 
 # ======================================================
 # Sidebar inputs
@@ -67,7 +67,7 @@ sector_colors = {
 }
 
 # ======================================================
-# Load coastline (cached)
+# Load coastline
 # ======================================================
 @st.cache_data(show_spinner=False)
 def load_coastline():
@@ -83,8 +83,10 @@ if run:
     origin = Point(lon, lat)
     bearings = np.arange(0, 360, bearing_step)
 
-    rows = []
+    rows = {}
     trimmed_lines = {}
+
+    rows = []
 
     with st.spinner("Computing directional fetch..."):
         for bearing in bearings:
@@ -93,6 +95,7 @@ if run:
             for d in range(1, max_km + 1):
                 dest = geodesic(kilometers=d).destination((lat, lon), bearing)
                 pt = Point(dest.longitude, dest.latitude)
+
                 if coastline.distance(pt) <= buffer_distance:
                     hit = pt
                     break
@@ -109,8 +112,8 @@ if run:
                 fetch_km = max_km
 
             sector = bearing_to_sector(bearing)
-
             trimmed_lines[bearing] = line
+
             rows.append({
                 "Bearing (deg)": bearing,
                 "Direction": sector,
@@ -120,11 +123,11 @@ if run:
     df_fetch = pd.DataFrame(rows)
 
     # ======================================================
-    # Plot (NO BASEMAP, NO INTERNAL COASTLINE)
+    # Plot
     # ======================================================
     fig = go.Figure()
 
-    # --- Natural Earth coastline ONLY ---
+    # --- Natural Earth coastline (your file) ---
     for geom in coastline_gdf.geometry:
         if geom.geom_type == "LineString":
             x, y = geom.xy
@@ -155,7 +158,7 @@ if run:
             lat=list(y),
             mode="lines",
             line=dict(width=1.4, color=sector_colors[sector]),
-            opacity=0.8,
+            opacity=0.85,
             showlegend=False
         ))
 
@@ -168,28 +171,32 @@ if run:
         name="Origin"
     ))
 
-    # 🔴 THIS BLOCK IS THE KEY FIX
+    # ======================================================
+    # GEO SETTINGS — LAND / SEA COLORS
+    # ======================================================
     fig.update_geos(
         projection_type="mercator",
         center=dict(lat=lat, lon=lon),
         lataxis_range=[lat - zoom_deg, lat + zoom_deg],
         lonaxis_range=[lon - zoom_deg, lon + zoom_deg],
 
-        showcoastlines=False,
-        coastlinecolor=None,
-        showland=False,
-        showocean=False,
+        showland=True,
+        landcolor="#efe8d8",
+
+        showocean=True,
+        oceancolor="#dcecf7",
+
+        showcoastlines=False,   # ❗ prevent duplicate coastlines
+        showcountries=False,
         showlakes=False,
         showrivers=False,
-        showcountries=False,
-        showframe=False,
-        bgcolor="white"
+        showframe=False
     )
 
     fig.update_layout(
         height=750,
         margin=dict(l=0, r=0, t=40, b=0),
-        title="Directional Fetch (Single Coastline)"
+        title="Directional Fetch with Land–Sea Background"
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -204,36 +211,34 @@ if run:
     )
 
     # ======================================================
-    # Effective fetch (ordered from North clockwise)
+    # Effective fetch
     # ======================================================
     dir_order = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-    
     eff_rows = []
-    
+
     for sector in dir_order:
         sub = df_fetch[df_fetch["Direction"] == sector]
-    
         if sub.empty:
             continue
-    
+
         theta = np.deg2rad(sub["Bearing (deg)"] - sub["Bearing (deg)"].mean())
         w = np.cos(theta) ** 2
         eff = np.sum(sub["Fetch (km)"] * w) / np.sum(w)
-    
+
         eff_rows.append({
             "Direction": sector,
             "Effective Fetch (km)": eff
         })
-    
+
     df_eff = pd.DataFrame(eff_rows)
-    
+
     st.subheader("Effective Fetch per Direction")
     st.dataframe(
         df_eff.style.format({"Effective Fetch (km)": "{:.2f}"}),
         use_container_width=True
     )
+
     st.success("Analysis complete ✔️")
 
 else:
     st.info("👈 Enter coordinates and click **Run Analysis**")
-
