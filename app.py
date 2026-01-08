@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 # ======================================================
 st.set_page_config(page_title="Directional Fetch Analyzer", layout="wide")
 st.title("Directional Fetch to Nearest Coastline")
-st.caption("Single coastline · Land/sea background · Directional fetch")
+st.caption("Single coastline · Optional land/sea background · Directional fetch")
 
 # ======================================================
 # Sidebar inputs
@@ -31,6 +31,12 @@ buffer_distance = st.sidebar.slider(
 )
 
 zoom_deg = st.sidebar.slider("Initial zoom window (degrees)", 1, 20, 6)
+
+# ✅ NEW: background toggle (BEFORE Run)
+show_bg = st.sidebar.checkbox(
+    "Enable land/sea background",
+    value=True
+)
 
 run = st.sidebar.button("🚀 Run Analysis")
 
@@ -83,10 +89,8 @@ if run:
     origin = Point(lon, lat)
     bearings = np.arange(0, 360, bearing_step)
 
-    rows = {}
-    trimmed_lines = {}
-
     rows = []
+    trimmed_lines = {}
 
     with st.spinner("Computing directional fetch..."):
         for bearing in bearings:
@@ -127,7 +131,7 @@ if run:
     # ======================================================
     fig = go.Figure()
 
-    # --- Natural Earth coastline (your file) ---
+    # --- Natural Earth coastline (authoritative) ---
     for geom in coastline_gdf.geometry:
         if geom.geom_type == "LineString":
             x, y = geom.xy
@@ -172,31 +176,40 @@ if run:
     ))
 
     # ======================================================
-    # GEO SETTINGS — LAND / SEA COLORS
+    # GEO SETTINGS (conditional background)
     # ======================================================
-    fig.update_geos(
+    geo_kwargs = dict(
         projection_type="mercator",
         center=dict(lat=lat, lon=lon),
         lataxis_range=[lat - zoom_deg, lat + zoom_deg],
         lonaxis_range=[lon - zoom_deg, lon + zoom_deg],
-
-        showland=True,
-        landcolor="#efe8d8",
-
-        showocean=True,
-        oceancolor="#dcecf7",
-
-        showcoastlines=False,   # ❗ prevent duplicate coastlines
+        showcoastlines=False,
         showcountries=False,
         showlakes=False,
         showrivers=False,
         showframe=False
     )
 
+    if show_bg:
+        geo_kwargs.update(
+            showland=True,
+            landcolor="#efe8d8",
+            showocean=True,
+            oceancolor="#dcecf7"
+        )
+    else:
+        geo_kwargs.update(
+            showland=False,
+            showocean=False,
+            bgcolor="white"
+        )
+
+    fig.update_geos(**geo_kwargs)
+
     fig.update_layout(
         height=750,
         margin=dict(l=0, r=0, t=40, b=0),
-        title="Directional Fetch with Land–Sea Background"
+        title="Directional Fetch"
     )
 
     st.plotly_chart(fig, use_container_width=True)
